@@ -12,13 +12,17 @@ shape_meta: &shape_meta
       shape: [3,128,128]  # 图像的形状：3个颜色通道（RGB），每个通道的大小为128x128
       type: rgb  # 图像数据类型为RGB
 
+    qpos:
+      shape: [7]
+      type: low_dim
+
   action:  # 动作数据配置
     shape: [7]  # 动作的形状：一个包含7个元素的向量，可能是机器人各个关节的控制命令
 
 task_name: &task_name reach_target  # 任务类型的名称（任务名称可以是“can”）
 dataset_type: &dataset_type ph  # 数据集类型，这里是“ph”
 dataset_path: &dataset_path data/dataset/${task.task_name}/merged_data.hdf5  # 数据集路径，通过变量引用任务名称和数据集类型
-abs_action: &abs_action True  # 是否使用绝对动作，设置为True表示使用绝对动作
+abs_action: &abs_action False  # 是否使用绝对动作，设置为True表示使用绝对动作
 
 env_runner:  # 环境运行器的配置
   _target_: diffusion_policy.env_runner.robomimic_image_runner.RobomimicImageRunner  # 环境运行器类的路径

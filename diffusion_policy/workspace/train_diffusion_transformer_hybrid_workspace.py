@@ -70,9 +70,9 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
 
         # 配置数据集
         dataset: BaseImageDataset  # 声明数据集类型为 BaseImageDataset
-        print("2")
+        print(cfg.task.dataset)
         dataset = hydra.utils.instantiate(cfg.task.dataset)  # 使用 Hydra 实例化数据集（根据配置文件）
-        print("1")
+
         assert isinstance(dataset, BaseImageDataset)  # 确保数据集是 BaseImageDataset 类型
         train_dataloader = DataLoader(dataset, **cfg.dataloader)  # 配置训练数据加载器
         normalizer = dataset.get_normalizer()  # 获取数据集的归一化器（用于对图像数据进行标准化）
@@ -80,7 +80,7 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
         # 配置验证数据集
         val_dataset = dataset.get_validation_dataset()  # 获取验证集
         val_dataloader = DataLoader(val_dataset, **cfg.val_dataloader)  # 配置验证数据加载器
-        print("aaaaaaaaa")
+
         # 设置模型的归一化器
         self.model.set_normalizer(normalizer)  # 将归一化器应用于训练模型
         if cfg.training.use_ema:  # 如果启用了 EMA
@@ -122,7 +122,7 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                 "output_dir": self.output_dir,  # 更新 WandB 配置，记录输出目录
             }
         )
-        print("ccccccc")
+
         # 配置检查点管理
         topk_manager = TopKCheckpointManager(
             save_dir=os.path.join(self.output_dir, 'checkpoints'),  # 保存检查点的目录
@@ -163,8 +163,12 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                                leave=False, mininterval=cfg.training.tqdm_interval_sec) as tepoch:
                     # 遍历训练数据的每个批次
                     for batch_idx, batch in enumerate(tepoch):
+
+
+
                         # 将当前批次的数据转移到指定设备（CPU 或 GPU）
                         batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
+
                         if train_sampling_batch is None:
                             train_sampling_batch = batch  # 保存第一批数据用于后续采样
 
@@ -174,10 +178,11 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                         loss.backward()  # 反向传播，计算梯度
 
                         # 更新优化器
-                        if self.global_step % cfg.training.gradient_accumulate_every == 0:  # 如果到了梯度累积的步数
-                            self.optimizer.step()  # 更新优化器
-                            self.optimizer.zero_grad()  # 清空梯度
-                            lr_scheduler.step()  # 更新学习率调度器
+
+                        self.optimizer.step()  # 更新优化器
+                        self.optimizer.zero_grad()  # 清空梯度
+                        lr_scheduler.step()  # 更新学习率调度器
+
 
                         # 更新 EMA 模型
                         if cfg.training.use_ema:
@@ -245,7 +250,7 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                 #             # 更新当前步骤的日志信息，记录验证损失
                 #             step_log['val_loss'] = val_loss
                 #
-                # # 如果当前 epoch 需要进行采样（例如，从训练集预测动作并计算误差）
+                # 如果当前 epoch 需要进行采样（例如，从训练集预测动作并计算误差）
                 # if (self.epoch % cfg.training.sample_every) == 0:
                 #     with torch.no_grad():  # 在采样时禁用梯度计算
                 #         # 使用保存的训练批次数据进行采样

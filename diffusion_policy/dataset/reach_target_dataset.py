@@ -52,7 +52,7 @@ class reach_target_dataset(BaseImageDataset):
                  seed=42,  # 随机种子，用于数据的随机性
                  val_ratio=0.0  # 验证集比例，默认为 0，表示没有验证集
                  ):
-        print("3")
+
         # 初始化旋转变换器，使用 'axis_angle' 到 'rotation_6d' 的旋转表示转换
         rotation_transformer = RotationTransformer(
             from_rep='axis_angle', to_rep=rotation_rep)
@@ -247,7 +247,7 @@ class reach_target_dataset(BaseImageDataset):
                 this_normalizer = normalizer_from_stat(stat)  # 使用旧的归一化方法
 
         else:  # 如果没有使用绝对动作，动作数据已经归一化
-            this_normalizer = get_identity_normalizer_from_stat(stat)  # 使用恒等归一化器，表示不做额外处理
+            this_normalizer = get_range_normalizer_from_stat(stat)  # 使用恒等归一化器，表示不做额外处理
 
         normalizer['action'] = this_normalizer  # 将动作数据的归一化器添加到归一化器字典中
 
@@ -331,8 +331,8 @@ def _convert_actions(raw_actions, abs_action, rotation_transformer):
         # 重新组合转换后的动作数据
         raw_actions = np.concatenate([pos, rot, gripper], axis=-1).astype(np.float32)
 
-        if is_dual_arm:  # 如果是双臂任务，将动作 reshape 为每个任务 20 维
-            raw_actions = raw_actions.reshape(-1, 20)
+        # if is_dual_arm:  # 如果是双臂任务，将动作 reshape 为每个任务 20 维
+        #     raw_actions = raw_actions.reshape(-1, 20)
         actions = raw_actions  # 返回处理后的动作数据
     return actions
 
@@ -389,11 +389,15 @@ def _convert_robomimic_to_replay(store, shape_meta, dataset_path, abs_action, ro
                 demo = demos[f'demo_{i}']
                 this_data.append(demo[data_key][:].astype(np.float32))  # 读取全部的动作或低维观测数据
             this_data = np.concatenate(this_data, axis=0)  # 将 this_data 列表中的多个数组沿着 axis=0（即按时间步）进行拼接。
+            print("afsagsgfghdfhs", len(this_data))
+
             if key == 'action':  # 如果是动作数据，转换动作数据格式
                 assert this_data.shape == (n_steps,) + tuple(shape_meta['action']['shape'])
             else:
                 # 确保观测数据的形状符合要求
                 assert this_data.shape == (n_steps,) + tuple(shape_meta['obs'][key]['shape'])
+
+
             # 将数据保存到 Zarr 存储中
             _ = data_group.array(
                 name=key,  # 数据名称
