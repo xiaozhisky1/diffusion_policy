@@ -140,20 +140,15 @@ class DiffusionTransformerHybridImagePolicy(BaseImagePolicy):
         cond_dim = obs_feature_dim if obs_as_cond else 0
 
         model = TransformerForDiffusion(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            horizon=horizon,
-            n_obs_steps=n_obs_steps,
-            cond_dim=cond_dim,
-            n_layer=n_layer,
-            n_head=n_head,
-            n_emb=n_emb,
-            p_drop_emb=p_drop_emb,
-            p_drop_attn=p_drop_attn,
-            causal_attn=causal_attn,
-            time_as_cond=time_as_cond,
-            obs_as_cond=obs_as_cond,
-            n_cond_layers=n_cond_layers
+            ac_dim = 7,  # 动作的维度
+            ac_chunk = 10,  # 动作分块的数量
+            time_dim=256,  # 时间嵌入的维度
+            hidden_dim=128,  # 隐藏层维度
+            num_blocks=6,  # 编码器和解码器的层数
+            dropout=0.1,  # Dropout 的概率
+            dim_feedforward=2048,  # 前馈网络隐藏层的大小
+            nhead=8,  # 多头注意力机制的头数
+            activation="gelu",
         )
 
         self.obs_encoder = obs_encoder
@@ -181,7 +176,7 @@ class DiffusionTransformerHybridImagePolicy(BaseImagePolicy):
         self.num_inference_steps = num_inference_steps
     
     # ========= inference  ============
-    def conditional_sample(self, 
+    def conditional_sample(self,
             condition_data, condition_mask,
             cond=None, generator=None,
             # keyword arguments to scheduler.step
@@ -191,30 +186,32 @@ class DiffusionTransformerHybridImagePolicy(BaseImagePolicy):
         scheduler = self.noise_scheduler
 
         trajectory = torch.randn(
-            size=condition_data.shape, 
+            size=condition_data.shape,
             dtype=condition_data.dtype,
             device=condition_data.device,
             generator=generator)
-    
+
         # set step values
         scheduler.set_timesteps(self.num_inference_steps)
 
         for t in scheduler.timesteps:
+            t1 = t.view(-1).to(device=condition_data.device)  # 将 t 转为 1维张量
+            print("t shape",t.shape)
             # 1. apply conditioning
             trajectory[condition_mask] = condition_data[condition_mask]
 
             # 2. predict model output
-            model_output = model(trajectory, t, cond)
+            _, model_output = model(trajectory, t1, cond)
 
             # 3. compute previous image: x_t -> x_t-1
             trajectory = scheduler.step(
-                model_output, t, trajectory, 
+                model_output, t, trajectory,
                 generator=generator,
                 **kwargs
                 ).prev_sample
-        
+
         # finally make sure conditioning is enforced
-        trajectory[condition_mask] = condition_data[condition_mask]        
+        trajectory[condition_mask] = condition_data[condition_mask]
 
         return trajectory
 
@@ -330,6 +327,7 @@ class DiffusionTransformerHybridImagePolicy(BaseImagePolicy):
             nobs_features = self.obs_encoder(this_nobs)
             # reshape back to B, T, Do
             cond = nobs_features.reshape(batch_size, To, -1)
+            # print("cond shape", cond.shape)
             if self.pred_action_steps_only:
                 start = To - 1
                 end = start + self.n_action_steps
@@ -368,7 +366,7 @@ class DiffusionTransformerHybridImagePolicy(BaseImagePolicy):
         noisy_trajectory[condition_mask] = trajectory[condition_mask]
         
         # Predict the noise residual
-        pred = self.model(noisy_trajectory, timesteps, cond)
+        _, pred = self.model(noisy_trajectory, timesteps, cond)
 
         pred_type = self.noise_scheduler.config.prediction_type 
         if pred_type == 'epsilon':

@@ -2,6 +2,8 @@ import sys
 import time
 from calendar import EPOCH
 
+from diffusion_policy.env.block_pushing.utils.utils_pybullet import write_pybullet_state
+
 # 设置标准输出和标准错误的缓冲方式为行缓冲，这样输出会在每行结束时刷新
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
 sys.stderr = open(sys.stderr.fileno(), mode='w', buffering=1)
@@ -25,8 +27,30 @@ from diffusion_policy.real_world.real_inference_util import (
     get_real_obs_resolution,
     get_real_obs_dict)
 import numpy as np
+from rlbench.const import SUPPORTED_ROBOTS
 from RLBench_ACT.act.constants import DT
+import numpy as np
+from scipy.spatial.transform import Rotation
 
+def compute_pose_in_world(T_BW, T_AB):
+    # 从 T_BW 和 T_AB 中提取位置和四元数
+    p_BW = np.array(T_BW[:3])  # B 在世界坐标系中的位置
+    q_BW = np.array(T_BW[3:])  # B 在世界坐标系中的四元数
+
+    p_AB = np.array(T_AB[:3])  # A 在 B 坐标系中的位置
+    q_AB = np.array(T_AB[3:])  # A 在 B 坐标系中的四元数
+
+    # 计算 A 在世界坐标系中的位置
+    # 将四元数转换为旋转矩阵
+    R_BW = Rotation.from_quat(q_BW).as_matrix()  # 从四元数生成旋转矩阵
+    p_AW = R_BW @ p_AB + p_BW  # 世界坐标系中的位置
+
+    # 计算 A 在世界坐标系中的姿态
+    q_AW = Rotation.from_quat(q_BW) * Rotation.from_quat(q_AB)  # 四元数乘法
+    q_AW = q_AW.as_quat()  # 转换为四元数格式
+
+    # 返回结果：位置和四元数组合成 7 元素数组
+    return np.concatenate([p_AW, q_AW])
 
 def get_image(ts):
     curr_images = []
@@ -74,9 +98,10 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
         policy = workspace.ema_model
 
     # 将模型移到指定的设备（GPU 或 CPU）
+    device = torch.device(device)
     policy.eval().to(device)  # 设置模型为评估模式，并转移到 GPU
 
-    policy.num_inference_steps = 16  # 设置 DDIM 推理步骤数
+    policy.num_inference_steps = 100  # 设置 DDIM 推理步骤数
     policy.n_action_steps = 8  # 设置动作步骤数
 
     print("n_action_steps", policy.n_action_steps)
@@ -87,13 +112,19 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
     env = make_sim_env(task_name, onscreen_render, robot_name)  # 创建模拟环境
     env_max_reward = 1  # 设置最大奖励（模拟环境）
+    env.set_variation(0)
     episode_returns = []  # 记录每回合的总奖励
     highest_rewards = []  # 记录每回合的最大奖励
+    robot_setup: str = 'panda'
+    robot_setup = robot_setup.lower()
+    arm_class, gripper_class, _ = SUPPORTED_ROBOTS[
+        robot_setup]
+    arm, gripper = arm_class(), gripper_class()
+    arm_pose = arm.get_pose()
 
-    max_timesteps = 200
 
     # 定义预处理和后处理函数
-    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/2024.12.10/15.07.19_train_diffusion_transformer_hybrid_reach_target"
+    ckpt_dir = "/home/mar/diffusion_policy/data/outputs/2024.12.29/21.14.29_train_diffusion_transformer_hybrid_reach_target/checkpoints/"
 
 
     for epoch in range(epochs):
@@ -105,13 +136,16 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
         # else:
         #     random_variation = np.random.randint(3)  # 随机选择一个变种
         #     env.set_variation(random_variation)
+        env.set_variation(variation)
 
         try:
             descriptions, ts_obs = env.reset()
             time.sleep(1)  # 等待1000秒
-            print(dir(ts_obs))
         except Exception as e:
             print(f"An error occurred: {e}")
+
+        print(dir(ts_obs))
+
 
         # with h5py.File("/home/mar/RLBench_ACT/Data3/reach_target/variation0/merged_data.hdf5") as file:
         #     # count total steps
@@ -141,7 +175,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
             import numpy as np
             terminate = False
             obs = ts_obs
-            joint_positions = np.append(obs.joint_positions, obs.gripper_open)
+            joint_positions = np.append(obs.gripper_pose, obs.gripper_open)
 
 
             while not terminate:
@@ -149,7 +183,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                 image_list.append({'front': obs.front_rgb, 'head': obs.head_rgb, 'wrist': obs.wrist_rgb})  # 保存图像
                 import numpy as np
 
-                qpos_list.append({'qpos': np.append(obs.joint_positions, obs.gripper_open)})
+                qpos_list.append({'qpos': np.append(obs.gripper_pose, obs.gripper_open)})
 
 
 
@@ -165,7 +199,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                     'wrist': np.empty((0, obs.wrist_rgb.shape[0], obs.wrist_rgb.shape[1], obs.wrist_rgb.shape[2]),
                                       dtype=np.uint8),
                     # 假设 wrist_rgb 是 (height, width, channels)，直接设定 dtype 为 uint8
-                    'head': np.empty((0, obs.front_rgb.shape[0], obs.front_rgb.shape[1], obs.front_rgb.shape[2]),
+                    'front': np.empty((0, obs.front_rgb.shape[0], obs.front_rgb.shape[1], obs.front_rgb.shape[2]),
                                      dtype=np.uint8),
 
                     # # 如果你想创建一个与 joint_positions 相同维度的空数组
@@ -175,47 +209,65 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
                 if t == 0:
                     # 直接在拼接时将图像转换为 uint8 类型
-                    observation["head"] = np.concatenate(
-                        [observation["head"], obs.front_rgb[np.newaxis, ...].astype(np.uint8)], axis=0)
+                    observation["front"] = np.concatenate(
+                        [observation["front"], obs.front_rgb[np.newaxis, ...].astype(np.uint8)], axis=0)
                     observation["wrist"] = np.concatenate(
                         [observation["wrist"], obs.wrist_rgb[np.newaxis, ...].astype(np.uint8)], axis=0)
 
-                    joint_positions1 = np.append(obs.joint_positions, obs.gripper_open)
+                    joint_positions1 = np.append(obs.gripper_pose, obs.gripper_open)
                     observation["qpos"] = np.concatenate([observation["qpos"], joint_positions1[np.newaxis, ...]], axis=0)
 
                     # 直接在拼接时将图像转换为 uint8 类型
-                    observation["head"] = np.concatenate(
-                        [observation["head"], obs.front_rgb[np.newaxis, ...].astype(np.uint8)], axis=0)
+                    observation["front"] = np.concatenate(
+                        [observation["front"], obs.front_rgb[np.newaxis, ...].astype(np.uint8)], axis=0)
                     observation["wrist"] = np.concatenate(
                         [observation["wrist"], obs.wrist_rgb[np.newaxis, ...].astype(np.uint8)], axis=0)
-                    joint_positions2 = np.append(obs.joint_positions, obs.gripper_open)
+                    joint_positions2 = np.append(obs.gripper_pose, obs.gripper_open)
                     observation["qpos"] = np.concatenate([observation["qpos"], joint_positions2[np.newaxis, ...]], axis=0)
 
 
+
+                    # # 打印图像的内容（可以用于调试）
+                    # print(rgb_images["head"][0])
+                    # print(rgb_images["wrist"][0])
+                    #
+                    # # 显示头部图像
+                    # head_image = rgb_images["head"][0]
+                    # image = Image.fromarray(head_image)
+                    # plt.axis('off')  # 关闭坐标轴显示
+                    # plt.imshow(image)
+                    # plt.show()
+
+                    # # 如果你也想显示手腕图像，可以按如下方式显示：
+                    # wrist_image = rgb_images["wrist"][0]
+                    # wrist_image_pil = Image.fromarray(wrist_image)
+                    # plt.axis('off')
+                    # plt.imshow(wrist_image_pil)
+                    # plt.show()
+
+                    # 设置终止条件
+                    # terminate = True
                 else:
                     last_image = image_list[-2]  # 倒数第一个元素
                     second_last_image = image_list[-3]  # 倒数第二个元素
 
                     last_qpos = qpos_list[-2]
                     second_last_qpos = qpos_list[-3]
-                    print("last_qpos", last_qpos)
-                    print("second_qpos", second_last_qpos)
+                    # print("last_qpos", last_qpos)
+                    # print("second_qpos", second_last_qpos)
                     observation['wrist'] = np.concatenate(
                         [observation['wrist'], second_last_image['wrist'][np.newaxis, ...]], axis=0)
                     observation['wrist'] = np.concatenate([observation['wrist'], last_image['wrist'][np.newaxis, ...]],
                                                          axis=0)
 
 
-                    observation['head'] = np.concatenate(
-                        [observation['head'], second_last_image['front'][np.newaxis, ...]], axis=0)
-                    observation['head'] = np.concatenate([observation['head'], last_image['front'][np.newaxis, ...]],
+                    observation['front'] = np.concatenate(
+                        [observation['front'], second_last_image['front'][np.newaxis, ...]], axis=0)
+                    observation['front'] = np.concatenate([observation['front'], last_image['front'][np.newaxis, ...]],
                                                         axis=0)
 
                     observation['qpos'] = np.concatenate([observation['qpos'], second_last_qpos['qpos'][np.newaxis, ...]], axis=0)
                     observation['qpos'] = np.concatenate([observation['qpos'], last_qpos['qpos'][np.newaxis, ...]],axis=0)
-
-
-
 
 
                 # 将环境的观察数据（`obs`）转换为模型所需要的输入格式
@@ -241,29 +293,55 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                 # print("action", action)
                 # 获取模型输出的动作数据，`.detach()` 用于移除计算图，`to('cpu')` 将张量转移到 CPU，
                 # `numpy()` 用于转换为 NumPy 数组，方便后续处理。
+                # print(action)
                 print(action)
                 for i in range(8):
                     action_first_six = action[i]
+
+
+
+
+
+
+                    quaternion_raw = action_first_six[3:7]
+                    # 计算平方和的平方根
+                    norm = np.sqrt(np.sum(quaternion_raw ** 2))
+                    # 如果 norm 为 0，避免除以 0
+                    if norm > 0:
+                        quaternion_normalized = quaternion_raw / norm
+                    else:
+                        # 如果 norm 为 0，设置为单位四元数
+                        quaternion_normalized = np.array([1, 0, 0, 0])
+                    # 替换到原数组中
+                    action_first_six[3:7] = quaternion_normalized
+                    # 打印结果
+                    print("归一化后的数组：", action_first_six)
+
+                    action_world = compute_pose_in_world(arm_pose, action_first_six[:-1])
+                    action_world = np.concatenate([action_world, np.array([action_first_six[-1]])])
+
+                    print("action_world", action_world)
                 # 发送动作到环境并获取新的状态和奖励
                 #     if action_first_six[6] < 0.1:
                 #         action_first_six[6] = 1.0
-                    ts_obs, reward, terminate = env.step(action_first_six)
+
+                    ts_obs, reward, terminate = env.step(action_world)
+
                     obs = ts_obs
                     image_list.append(
                         {'front': obs.front_rgb, 'head': obs.head_rgb, 'wrist': obs.wrist_rgb})  # 保存图像
-                    qpos_list.append({'qpos': np.append(obs.joint_positions, obs.gripper_open)})
+                    qpos_list.append({'qpos': np.append(obs.gripper_pose, obs.gripper_open)})
                     rewards.append(reward)  # 记录奖励
-                    if terminate:
-                        break
+
+                    t = t + 1  # 增加时间步计数器
+
+                    if reward == env_max_reward:
+                        break  # 如果获得最大奖励，直接跳出循环（成功完成任务)
+
+                    print(t)
 
 
-                if reward == env_max_reward:
-                    break  # 如果获得最大奖励，直接跳出循环（成功完成任务)
-
-                t = t + 1  # 增加时间步计数器
-
-                # plt.close()  # 关闭图形窗口（如果有可视化的话）
-                if(t >= 50):
+                if t >= 200:
                     break
 
         # 记录每个回合的奖励信息
@@ -318,10 +396,10 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 # %%
 if __name__ == '__main__':
-    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/2024.12.31/17.37.51_train_diffusion_transformer_hybrid_reach_target/checkpoints/latest.ckpt"
+    ckpt_dir = "/home/mar/diffusion_policy/data/outputs/2024.12.29/21.14.29_train_diffusion_transformer_hybrid_reach_target/checkpoints/5000.ckpt.ckpt"
     checkpoint = ckpt_dir
     ckpt_name0 = "latest.ckpt"
     task_name = "reach_target"
-    robot_name = "ur5"
+    robot_name = "panda"
     device = "cuda:0"
     main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscreen_render=True, variation=0)
