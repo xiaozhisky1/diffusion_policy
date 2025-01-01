@@ -95,7 +95,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
     max_timesteps = 50
 
     # 定义预处理和后处理函数
-    ckpt_dir = "/home/wxy/Diffusion/diffusion_policy/data/outputs/2024.12.30/20.42.37_train_diffusion_transformer_hybrid_reach_target/checkpoints"
+    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data"
 
 
     for epoch in range(epochs):
@@ -427,7 +427,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 # %%
 if __name__ == '__main__':
-    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/2024.12.31/17.37.51_train_diffusion_transformer_hybrid_reach_target/checkpoints/latest.ckpt"
+    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/2024.12.31/22.38.01_train_diffusion_transformer_hybrid_reach_target/checkpoints/latest.ckpt"
     checkpoint = ckpt_dir
     ckpt_name0 = "latest.ckpt"
     task_name = "reach_target"
