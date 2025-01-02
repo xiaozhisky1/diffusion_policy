@@ -101,7 +101,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
     device = torch.device(device)
     policy.eval().to(device)  # 设置模型为评估模式，并转移到 GPU
 
-    policy.num_inference_steps = 16  # 设置 DDIM 推理步骤数
+    policy.num_inference_steps = 100  # 设置 DDIM 推理步骤数
     policy.n_action_steps = 8  # 设置动作步骤数
 
     print("n_action_steps", policy.n_action_steps)
@@ -124,7 +124,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 
     # 定义预处理和后处理函数
-    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data"
+    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/eval"
 
 
     for epoch in range(epochs):
@@ -294,14 +294,9 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                 # 获取模型输出的动作数据，`.detach()` 用于移除计算图，`to('cpu')` 将张量转移到 CPU，
                 # `numpy()` 用于转换为 NumPy 数组，方便后续处理。
                 # print(action)
-                print(action)
-                for i in range(8):
+                # print(action)
+                for i in range(4):
                     action_first_six = action[i]
-
-
-
-
-
 
                     quaternion_raw = action_first_six[3:7]
                     # 计算平方和的平方根
@@ -315,17 +310,19 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                     # 替换到原数组中
                     action_first_six[3:7] = quaternion_normalized
                     # 打印结果
-                    print("归一化后的数组：", action_first_six)
+                    # print("归一化后的数组：", action_first_six)
 
                     action_world = compute_pose_in_world(arm_pose, action_first_six[:-1])
                     action_world = np.concatenate([action_world, np.array([action_first_six[-1]])])
 
-                    print("action_world", action_world)
+                    # print("action_world", action_world)
                 # 发送动作到环境并获取新的状态和奖励
                 #     if action_first_six[6] < 0.1:
                 #         action_first_six[6] = 1.0
-
-                    ts_obs, reward, terminate = env.step(action_world)
+                    try:
+                        ts_obs, reward, terminate = env.step(action_world)
+                    except Exception as e:
+                        continue
 
                     obs = ts_obs
                     image_list.append(
@@ -396,10 +393,10 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 # %%
 if __name__ == '__main__':
-    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/3000.ckpt.ckpt"
+    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/2025.01.02/14.14.04_train_diffusion_transformer_hybrid_reach_target/checkpoints/1000.ckpt"
     checkpoint = ckpt_dir
     ckpt_name0 = "latest.ckpt"
     task_name = "reach_target"
     robot_name = "panda"
     device = "cuda:0"
-    main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscreen_render=True, variation=0)
+    main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=100, onscreen_render=True, variation=0)

@@ -275,6 +275,8 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                     # 检查点保存
                     if cfg.checkpoint.save_last_ckpt:  # 如果配置中要求保存最后的检查点
                         self.save_checkpoint()  # 保存当前模型的检查点
+                        tag = f"{self.epoch}"
+                        self.save_checkpoint(tag=tag)
                     if cfg.checkpoint.save_last_snapshot:  # 如果配置中要求保存最后的快照
                         self.save_snapshot()  # 保存当前模型的快照
 
@@ -302,7 +304,7 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
 
 @hydra.main(
     version_base=None,
-    config_path=str(pathlib.Path(__file__).parent.parent.joinpath("config")), 
+    config_path=str(pathlib.Path(__file__).parent.parent.joinpath("config")),
     config_name=pathlib.Path(__file__).stem)
 def main(cfg):
     workspace = TrainDiffusionTransformerHybridWorkspace(cfg)

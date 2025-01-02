@@ -29,7 +29,7 @@ class DiffusionTransformerHybridImagePolicy(BaseImagePolicy):
             n_obs_steps,
             num_inference_steps=None,
             # image
-            crop_shape=(76, 76),
+            crop_shape=(100,100),
             obs_encoder_group_norm=False,
             eval_fixed_crop=False,
             # arch
