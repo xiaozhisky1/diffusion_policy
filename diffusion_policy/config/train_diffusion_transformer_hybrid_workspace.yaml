@@ -71,7 +71,7 @@ ema:
   max_value: 0.9999              # EMA 平滑的最大值，表示EMA的最大权重值。
 
 dataloader:
-  batch_size: 64                 # 每个训练批次的样本数，设置为64。
+  batch_size: 128                 # 每个训练批次的样本数，设置为64。
   num_workers: 8                 # 数据加载时使用的工作进程数，8个工作进程可以加速数据加载。
   shuffle: True                  # 是否对数据进行随机打乱，`True` 表示每个epoch都会打乱数据。
   pin_memory: True               # 是否将数据加载到GPU内存中，设置为 `True` 可以加速数据加载。
@@ -100,14 +100,14 @@ training:
   # optimization
   lr_scheduler: cosine           # 学习率调度器类型，使用余弦退火调度器（cosine decay）。
   lr_warmup_steps: 1000           # 学习率预热步骤数，设置为1000步，逐渐增加学习率。
-  num_epochs: 4050                # 训练的总epoch数，设置为3050个训练周期。
+  num_epochs: 15000                # 训练的总epoch数，设置为3050个训练周期。
   gradient_accumulate_every: 1    # 每1个步数进行一次梯度累积，通常用于处理大batch训练时显存不足的情况。
   # EMA销毁性能问题
   use_ema: True                   # 是否使用EMA来平滑模型权重，`True`表示使用，`False`则不使用。
   # training loop control
   # in epochs
   rollout_every: 50               # 每50个epoch进行一次训练过程中轨迹采样。
-  checkpoint_every: 1000            # 每50个epoch保存一次模型检查点。
+  checkpoint_every: 500            # 每50个epoch保存一次模型检查点。
   val_every: 1                    # 每1个epoch进行一次验证。
   sample_every: 5                 # 每5个epoch进行一次样本生成。
   # steps per epoch

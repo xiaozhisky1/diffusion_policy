@@ -30,7 +30,7 @@ from RLBench_ACT.act.constants import DT
 import h5py
 
 # 假设数据存储在 demo_0.h5 文件中
-file_path = '/home/mar/diffusion_policy/data/dataset/reach_target/merged_data.hdf5'
+file_path = '/home/mar/diffusion_policy/data/dataset/reach_target(1)/merged_data.hdf5'
 
 task_name = "reach_target"
 onscreen_render = True

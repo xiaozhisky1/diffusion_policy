@@ -112,7 +112,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
         print(dir(ts_obs))
 
 
-        # with h5py.File("/home/mar/RLBench_ACT/Data3/reach_target/variation0/merged_data.hdf5") as file:
+        # with h5py.File("/home/mar/RLBench_ACT/Data3/reach_target(1)/variation0/merged_data.hdf5") as file:
         #     # count total steps
         #     demos = file['data']  # 打开 HDF5 文件并读取数据
         #     episode_ends = list()

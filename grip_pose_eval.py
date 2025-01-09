@@ -128,6 +128,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 
     for epoch in range(epochs):
+        start_time = time.time()
         num_rollouts = epochs
         rollout_id = epoch
         # 设置环境的任务变种
@@ -147,7 +148,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
         print(dir(ts_obs))
 
 
-        # with h5py.File("/home/mar/RLBench_ACT/Data3/reach_target/variation0/merged_data.hdf5") as file:
+        # with h5py.File("/home/rookie/桌面/diffusion_policy/data/dataset/reach_target/reach_target_abs_merged_data.hdf5") as file:
         #     # count total steps
         #     demos = file['data']  # 打开 HDF5 文件并读取数据
         #     episode_ends = list()
@@ -160,7 +161,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
         #     # env.step(actions[0])
         #     for i in range(demo['action'].shape[0]):
         #         print(f"action{i}:" + str(actions[i]))
-        #         # env.step(actions[i])
+        #         env.step(actions[i])
 
         ### 评估循环
         image_list = []  # 用于可视化图像的列表
@@ -286,6 +287,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 
                 # 使用策略模型推理动作
+                print("model start eval")
                 result = policy.predict_action(obs_dict)
                 # 使用当前的观察数据输入到策略模型中，返回动作结果。
 
@@ -295,7 +297,7 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                 # `numpy()` 用于转换为 NumPy 数组，方便后续处理。
                 # print(action)
                 # print(action)
-                for i in range(4):
+                for i in range(8):
                     action_first_six = action[i]
 
                     quaternion_raw = action_first_six[3:7]
@@ -322,6 +324,11 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
                     try:
                         ts_obs, reward, terminate = env.step(action_world)
                     except Exception as e:
+                        print("action failed")
+                        print("timeout:" + str(time.time() - start_time))
+                        if(time.time() - start_time > 20.0):
+                            t = 200
+                            break
                         continue
 
                     obs = ts_obs
@@ -332,13 +339,16 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
                     t = t + 1  # 增加时间步计数器
 
-                    if reward == env_max_reward:
+                    if reward - env_max_reward == 0.0 and action_world[7] == 1.0:
+                        print("griper:" + str(action_world[7]))
+                        terminate = True
                         break  # 如果获得最大奖励，直接跳出循环（成功完成任务)
 
                     print(t)
 
 
-                if t >= 200:
+                if t >= 220:
+                    rewards = [0 for _ in rewards]
                     break
 
         # 记录每个回合的奖励信息
@@ -393,10 +403,10 @@ def main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=50, onscr
 
 # %%
 if __name__ == '__main__':
-    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/outputs/2025.01.02/14.14.04_train_diffusion_transformer_hybrid_reach_target/checkpoints/1000.ckpt"
+    ckpt_dir = "/home/rookie/桌面/diffusion_policy/data/7000.ckpt"
     checkpoint = ckpt_dir
     ckpt_name0 = "latest.ckpt"
-    task_name = "reach_target"
+    task_name = "close_laptop_lid"
     robot_name = "panda"
     device = "cuda:0"
     main(checkpoint, ckpt_name0, device, task_name, robot_name, epochs=100, onscreen_render=True, variation=0)
